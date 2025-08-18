@@ -1,2 +1,77 @@
 <?php
-require_once __DIR__.'/db.php';function current_user(){return $_SESSION['user']??null;}function require_login(){if(!current_user()){header('Location: '.BASE_URL.'/login');exit;}}function login($email,$password){$s=db()->prepare('SELECT id,email,passhash FROM vcely_users WHERE email=?');$s->execute([$email]);$u=$s->fetch();if($u && password_verify($password,$u['passhash'])){$_SESSION['user']=['id'=>(int)$u['id'],'email'=>$u['email']];return true;}return false;}function register_user($email,$password){$hash=password_hash($password,PASSWORD_DEFAULT);$s=db()->prepare('INSERT INTO vcely_users (email,passhash) VALUES (?,?)');$s->execute([$email,$hash]);return db()->lastInsertId();}function logout(){$_SESSION=[];if(ini_get('session.use_cookies')){$p=session_get_cookie_params();setcookie(session_name(),'',time()-42000,$p['path'],$p['domain'],$p['secure'],$p['httponly']);}session_destroy();}function send_reset_email($email,$token){$scheme=(!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS']==='on')?'https':'http';$link=$scheme.'://'.$_SERVER['HTTP_HOST'].BASE_URL.'/reset?token='.urlencode($token).'&email='.urlencode($email);$subject='Obnovení hesla – BeeScale';$body="Ahoj,\n\nklikni na odkaz pro obnovu hesla:\n$link\n\nPlatnost 1 hodina.";$headers='From: '.MAIL_FROM_NAME.' <'.MAIL_FROM.'>';return mail($email,$subject,$body,$headers);}function create_reset_token($email){$s=db()->prepare('SELECT id FROM vcely_users WHERE email=?');$s->execute([$email]);$u=$s->fetch();if(!$u) return false;$d=db()->prepare('DELETE FROM vcely_password_resets WHERE user_id=?');$d->execute([(int)$u['id']]);$token=bin2hex(random_bytes(32));$hash=password_hash($token,PASSWORD_DEFAULT);$ins=db()->prepare('INSERT INTO vcely_password_resets (user_id,email,token_hash,expires_at) VALUES (?,?,?, DATE_ADD(NOW(), INTERVAL 1 HOUR))');$ins->execute([(int)$u['id'],$email,$hash]);send_reset_email($email,$token);return true;}function reset_password_with_token($email,$token,$newpass){$s=db()->prepare('SELECT pr.id, pr.token_hash, u.id AS user_id FROM vcely_password_resets pr JOIN vcely_users u ON u.email=pr.email WHERE pr.email=? AND pr.expires_at > NOW() ORDER BY pr.id DESC LIMIT 1');$s->execute([$email]);$row=$s->fetch();if(!$row) return 'Neplatný nebo prošlý odkaz.';if(!password_verify($token,$row['token_hash'])) return 'Neplatný token.';$hash=password_hash($newpass,PASSWORD_DEFAULT);$u=db()->prepare('UPDATE vcely_users SET passhash=? WHERE id=?');$u->execute([$hash,(int)$row['user_id']]);$d=db()->prepare('DELETE FROM vcely_password_resets WHERE id=?');$d->execute([(int)$row['id']]);return true;}?>
+require_once __DIR__ . '/db.php';
+function current_user(){ return $_SESSION['user'] ?? null; }
+function require_login(){ if (!current_user()) { header('Location: ' . BASE_URL . '/login'); exit; } }
+function login($email, $password){
+  $s = db()->prepare('SELECT id,email,passhash FROM vcely_users WHERE email=?');
+  $s->execute([$email]); $u=$s->fetch();
+  if ($u && password_verify($password, $u['passhash'])) {
+    $_SESSION['user'] = ['id'=>(int)$u['id'], 'email'=>$u['email']];
+    return true;
+  }
+  return false;
+}
+function register_user($email, $password){
+  $hash = password_hash($password, PASSWORD_DEFAULT);
+  $s = db()->prepare('INSERT INTO vcely_users (email, passhash) VALUES (?,?)');
+  $s->execute([$email, $hash]);
+  return db()->lastInsertId();
+}
+function logout(){
+  $_SESSION = [];
+  if (ini_get('session.use_cookies')) {
+    $p = session_get_cookie_params();
+    setcookie(session_name(), '', time()-42000, $p['path'], $p['domain'], $p['secure'], $p['httponly']);
+  }
+  session_destroy();
+}
+function user_can_access_device($user_id, $device_id, $minRole='viewer'){
+  $st = db()->prepare('SELECT user_id FROM vcely_devices WHERE id=?');
+  $st->execute([$device_id]); $dev=$st->fetch();
+  if (!$dev) return false;
+  $owner_id = (int)$dev['user_id'];
+  if ($user_id === $owner_id) return true;
+  if ($minRole === 'owner') return false;
+  $st = db()->prepare('SELECT role FROM vcely_device_shares WHERE device_id=? AND user_id=?');
+  $st->execute([$device_id, $user_id]); $share=$st->fetch();
+  if (!$share) return false;
+  $role = $share['role'];
+  if ($minRole === 'viewer') return in_array($role, ['viewer','editor'], true);
+  if ($minRole === 'editor') return $role === 'editor';
+  return false;
+}
+function send_reset_email($email, $token){
+  $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS']==='on') ? 'https' : 'http';
+  $host = $_SERVER['HTTP_HOST'] ?? 'example.com';
+  $link = $scheme . '://' . $host . BASE_URL . '/reset?token=' . urlencode($token) . '&email=' . urlencode($email);
+  $subject = 'Obnovení hesla – BeeScale';
+  $body = "Ahoj,\n\nKlikni na odkaz pro obnovení hesla:\n$link\n\nPlatnost 1 hodina. Pokud jsi reset nevyžádal, ignoruj tento email.";
+  $headers = 'From: ' . MAIL_FROM_NAME . ' <' . MAIL_FROM . '>';
+  return mail($email, $subject, $body, $headers);
+}
+function create_reset_token($email){
+  $s=db()->prepare('SELECT id FROM vcely_users WHERE email=?');
+  $s->execute([$email]); $u=$s->fetch();
+  if (!$u) return true;
+  $d=db()->prepare('DELETE FROM vcely_password_resets WHERE user_id=?');
+  $d->execute([(int)$u['id']]);
+  $token = bin2hex(random_bytes(32));
+  $hash = password_hash($token, PASSWORD_DEFAULT);
+  $ins=db()->prepare('INSERT INTO vcely_password_resets (user_id,email,token_hash,expires_at) VALUES (?,?,?, DATE_ADD(NOW(), INTERVAL 1 HOUR))');
+  $ins->execute([(int)$u['id'], $email, $hash]);
+  send_reset_email($email, $token);
+  return true;
+}
+function reset_password_with_token($email,$token,$newpass){
+  $s=db()->prepare('SELECT pr.id, pr.token_hash, u.id AS user_id FROM vcely_password_resets pr JOIN vcely_users u ON u.email=pr.email WHERE pr.email=? AND pr.expires_at > NOW() ORDER BY pr.id DESC LIMIT 1');
+  $s->execute([$email]); $row=$s->fetch();
+  if (!$row) return 'Neplatný nebo prošlý odkaz.';
+  if (!password_verify($token, $row['token_hash'])) return 'Neplatný token.';
+  $hash=password_hash($newpass, PASSWORD_DEFAULT);
+  $u=db()->prepare('UPDATE vcely_users SET passhash=? WHERE id=?');
+  $u->execute([$hash, (int)$row['user_id']]);
+  $d=db()->prepare('DELETE FROM vcely_password_resets WHERE id=?');
+  $d->execute([(int)$row['id']]);
+  return true;
+}
+?>

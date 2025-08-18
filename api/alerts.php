@@ -1,1 +1,13 @@
-<?php require_once __DIR__.'/../lib/db.php'; require_once __DIR__.'/../lib/auth.php'; require_login(); $uid=current_user()['id']; $did=isset($_GET['device_id'])?intval($_GET['device_id']):0; if($did<=0){ http_response_code(400); echo 'device_id'; exit; } if(!user_can_access_device($uid,$did)){ http_response_code(403); echo 'forbidden'; exit; } header('Content-Type: application/json'); $s=db()->prepare('SELECT id,created_at,type,message,delta_g FROM vcely_alerts WHERE device_id=? ORDER BY id DESC LIMIT 100'); $s->execute([$did]); echo json_encode($s->fetchAll()); ?>
+<?php
+require_once __DIR__ . '/../lib/db.php';
+require_once __DIR__ . '/../lib/auth.php';
+require_login();
+$uid=current_user()['id'];
+$did=isset($_GET['device_id'])?intval($_GET['device_id']):0;
+if ($did<=0){ http_response_code(400); echo 'device_id'; exit; }
+if (!user_can_access_device($uid,$did,'viewer')){ http_response_code(403); echo 'forbidden'; exit; }
+header('Content-Type: application/json');
+$s=db()->prepare('SELECT id,created_at,type,message,delta_g FROM vcely_alerts WHERE device_id=? ORDER BY id DESC LIMIT 100');
+$s->execute([$did]);
+echo json_encode($s->fetchAll());
+?>
