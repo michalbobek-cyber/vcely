@@ -1,0 +1,41 @@
+/* BeeScale – mobilní kontrast + velikost písma + dark-mode */
+/* Bezpečně přetíží existující styly. */
+
+:root{
+  --text: #111;
+  --text-muted: #50545a;
+  --card-bg: #ffffff;
+  --card-border: #e5e7eb;
+  --btn-text: #0f172a;
+}
+
+@media (max-width: 600px){
+  html { font-size: 17px; } /* větší základ na mobilech */
+  body { color: var(--text); -webkit-font-smoothing: antialiased; }
+  h1,h2,h3 { color: var(--text); font-weight: 700; letter-spacing: .1px; }
+  .muted, .text-muted { color: var(--text-muted) !important; opacity: 1 !important; }
+  .card { background: var(--card-bg); border: 1px solid var(--card-border); color: var(--text); }
+  .card h3 { color: var(--text); }
+  .btn { font-weight: 600; color: var(--btn-text); }
+  .device-name { font-weight: 700; }
+  .device-meta, .device-stats { color: var(--text-muted); }
+  a, .btn-link { text-decoration: none; }
+}
+
+/* Předejdeme bledým textům i na větších šířkách */
+.card, .card * { color: inherit; }
+.muted, .text-muted { opacity: 1 !important; }
+
+/* Nepovinně: respektuj dark-mode uživatele */
+@media (prefers-color-scheme: dark){
+  :root{
+    --text: #f4f6f8;
+    --text-muted: #c0c8d2;
+    --card-bg: #171a1f;
+    --card-border: #2a2f37;
+    --btn-text: #e8edf3;
+  }
+  body { background: #0e1116; color: var(--text); }
+  .card { background: var(--card-bg); border-color: var(--card-border); }
+  .btn { color: var(--btn-text); }
+}
