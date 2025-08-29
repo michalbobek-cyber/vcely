@@ -12,7 +12,10 @@ $st->execute([$id,$uid]); $is_sub = (bool)$st->fetchColumn();
 
 $canEdit = user_can_access_device($uid,$id,'editor');
 
-$set = db()->prepare('SELECT enable_alerts, min_drop_g_24h, min_rise_g_24h FROM vcely_device_settings WHERE device_id=?');
+$set = db()->prepare('SELECT enable_alerts, min_drop_g_24h, min_rise_g_24h,
+                             instant_alert_enabled, instant_delta_g, instant_window_min, instant_cooldown_min
+                        FROM vcely_device_settings
+                       WHERE device_id=?');
 $set->execute([$id]); $settings = $set->fetch();
 if (!$settings){
   $ins = db()->prepare('INSERT INTO vcely_device_settings (device_id, enable_alerts, min_drop_g_24h, min_rise_g_24h) VALUES (?,?,?,?)');
@@ -103,6 +106,20 @@ header_html('Zařízení '.$dev['name']);
              value="<?= is_null($settings['min_rise_g_24h']) ? '' : h($settings['min_rise_g_24h']) ?>"
              placeholder="např. 500">
     </label>
+	<label><input type="checkbox" name="instant_alert_enabled" value="1" <?= !empty($settings['instant_alert_enabled'])?'checked':''; ?>> Okamžité alerty rychlého skoku</label>
+
+<label>Práh skoku [g]
+	<input type="number" name="instant_delta_g" value="<?= isset($settings['instant_delta_g']) ? (int)$settings['instant_delta_g'] : 3000 ?>" min="100" step="50">
+</label>
+
+<label>Okno [min]
+ <input type="number" name="instant_window_min" value="<?= isset($settings['instant_window_min']) ? (int)$settings['instant_window_min'] : 10 ?>" min="1" step="1">
+</label>
+
+<label>Cooldown [min]
+<input type="number" name="instant_cooldown_min" value="<?= isset($settings['instant_cooldown_min']) ? (int)$settings['instant_cooldown_min'] : 60 ?>" min="0" step="1">
+</label>
+
     <input type="hidden" name="device_id" value="<?= (int)$dev['id'] ?>">
     <button class="btn">Uložit</button>
     <span id="alertSaveMsg" class="muted"></span>
